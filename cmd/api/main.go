@@ -18,7 +18,15 @@ import (
 	"carwashinmaribackend/internal/middleware"
 	"carwashinmaribackend/internal/modules/auth"
 	"carwashinmaribackend/internal/modules/clientes"
+	"carwashinmaribackend/internal/modules/documentos"
+	"carwashinmaribackend/internal/modules/pedidos"
+	"carwashinmaribackend/internal/modules/productos"
 	"carwashinmaribackend/internal/modules/reclamos"
+	"carwashinmaribackend/internal/modules/espacios"
+	"carwashinmaribackend/internal/modules/reservas"
+	"carwashinmaribackend/internal/modules/servicios"
+	"carwashinmaribackend/internal/modules/trabajadores"
+	"carwashinmaribackend/internal/modules/vehiculos"
 	"carwashinmaribackend/internal/utils"
 )
 
@@ -138,9 +146,29 @@ func main() {
 			// -------------------------------------------------------------
 			// AQUÍ CONECTAN LOS DEMÁS:
 			// -------------------------------------------------------------
-			// Mego:   vehiculos.RegisterRoutes(protected, db)
-			// Fatima: servicios.RegisterRoutes(protected, db)
-			// Erick:  reservas.RegisterRoutes(protected, db)
+			// Fatima (RF-04, RF-07, RF-12): terminado.
+			servicios.RegisterRoutes(protected, db)
+			documentos.RegisterRoutes(protected, db, r2Client)
+			productos.RegisterRoutes(protected, db)
+			pedidos.RegisterRoutes(protected, db)
+
+			// Para que el flujo de reservas funcione se implementó una
+			// primera versión de partes asignados a otros del grupo. Falta que cada uno la
+			// revise y complete su requerimiento:
+			//
+			// Erick (RF-05, RF-06, RF-09): se implementó una primera versión completa de
+			//   los tres requerimientos (espacios y horarios, reservas, programación y
+			//   asignación de personal) para poder probar el flujo de punta a punta.
+			//   TODO(Erick): revísala y adáptala a tu criterio; puedes modificarla o
+			//   reemplazarla por completo (ver comentarios en esos módulos).
+			espacios.RegisterRoutes(protected, db)
+			reservas.RegisterRoutes(protected, db, documentos.NewChecker(db))
+			// Mego (RF-03, RF-08, RF-10): solo hay un registro mínimo de vehículos.
+			//   TODO(Mego): RF-03 completo, RF-08 evidencias y RF-10 trazabilidad.
+			vehiculos.RegisterRoutes(protected, db)
+			// Ingrid (RF-11, RF-13, RF-14): solo hay un alta mínima de trabajadores.
+			//   TODO(Ingrid): RF-13 completo, RF-11 pagos y RF-14 reportes.
+			trabajadores.RegisterRoutes(protected, db)
 			// Ingrid: pagos.RegisterRoutes(protected, db)
 		})
 	})
