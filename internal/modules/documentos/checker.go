@@ -25,6 +25,11 @@ func NewChecker(db *sql.DB) Checker {
 	return NewService(NewRepository(db))
 }
 
+// Reutiliza las reglas documentales dentro de la transacción de una atención.
+func NewTransactionalChecker(tx *sql.Tx) Checker {
+	return NewService(&repository{db: tx})
+}
+
 // ExigirDocumentosValidados devuelve nil si la reserva puede confirmarse, es decir,
 // si todos sus servicios que exigen documento tienen un PDF en estado "validado".
 // En caso contrario devuelve un error 409 que nombra los servicios pendientes, listo

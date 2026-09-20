@@ -199,9 +199,11 @@ func (r *repository) ObtenerPorID(ctx context.Context, id uuid.UUID) (*Pedido, e
 }
 
 var transiciones = map[string][]string{
-	EstadoRegistrado: {EstadoPagado, EstadoCancelado},
-	EstadoPagado:     {EstadoPreparando, EstadoCancelado},
-	EstadoPreparando: {EstadoEntregado, EstadoCancelado},
+	// El estado pagado solo puede establecerlo el módulo de pagos dentro de la
+	// misma transacción que registra el comprobante.
+	EstadoRegistrado: {EstadoCancelado},
+	EstadoPagado:     {EstadoPreparando},
+	EstadoPreparando: {EstadoEntregado},
 }
 
 func transicionValida(actual, nuevo string) bool {

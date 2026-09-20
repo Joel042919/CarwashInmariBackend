@@ -47,6 +47,7 @@ func RegisterRoutes(r chi.Router, db *sql.DB, docs documentos.Checker) {
 
 	r.Group(func(admin chi.Router) {
 		admin.Use(middleware.RequireRoles("administrador"))
+		admin.Use(reservaDeSede(db))
 		admin.Get("/admin/reservas", h.ListarTodas)
 		admin.Get("/admin/reservas/{id}/trabajadores", h.TrabajadoresDisponibles)
 		admin.Post("/admin/reservas/{id}/programar", h.Programar)
@@ -216,7 +217,11 @@ func (h *Handler) CancelarAdmin(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListarTodas(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	lista, err := h.service.ListarTodas(r.Context(), q.Get("estado"), q.Get("fecha"))
+	c, ok := claims(w, r)
+	if !ok {
+		return
+	}
+	lista, err := h.service.ListarTodas(r.Context(), c.SedeID, q.Get("estado"), q.Get("fecha"))
 	if err != nil {
 		utils.WriteError(w, err)
 		return

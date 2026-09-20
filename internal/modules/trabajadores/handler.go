@@ -34,11 +34,18 @@ func RegisterRoutes(r chi.Router, db *sql.DB) {
 		admin.Get("/admin/trabajadores", h.Listar)
 		admin.Post("/admin/trabajadores", h.Crear)
 		admin.Patch("/admin/trabajadores/{id}/disponibilidad", h.CambiarDisponibilidad)
+		admin.Put("/admin/trabajadores/{id}", h.Actualizar)
+		admin.Post("/admin/trabajadores/{id}/baja", h.DarBaja)
 	})
 }
 
 func (h *Handler) Listar(w http.ResponseWriter, r *http.Request) {
-	lista, err := h.service.Listar(r.Context())
+	c, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		utils.ErrorJSON(w, http.StatusUnauthorized, "Sesión requerida")
+		return
+	}
+	lista, err := h.service.Listar(r.Context(), c.SedeID)
 	if err != nil {
 		utils.WriteError(w, err)
 		return
@@ -76,9 +83,60 @@ func (h *Handler) CambiarDisponibilidad(w http.ResponseWriter, r *http.Request) 
 		utils.ErrorJSON(w, http.StatusBadRequest, "Cuerpo JSON inválido")
 		return
 	}
-	if err := h.service.CambiarDisponibilidad(r.Context(), id, in.Disponible); err != nil {
+	c, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		utils.ErrorJSON(w, http.StatusUnauthorized, "Sesión requerida")
+		return
+	}
+	if in.Disponible == nil {
+		utils.ErrorJSON(w, http.StatusBadRequest, "disponible es obligatorio")
+		return
+	}
+	if err := h.service.CambiarDisponibilidad(r.Context(), c.SedeID, id, *in.Disponible); err != nil {
 		utils.WriteError(w, err)
 		return
 	}
-	utils.JSON(w, http.StatusOK, map[string]bool{"disponible": in.Disponible})
+	utils.JSON(w, http.StatusOK, map[string]bool{"disponible": *in.Disponible})
+}
+
+func (h *Handler) Actualizar(w http.ResponseWriter, r *http.Request) {
+	c, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		utils.ErrorJSON(w, 401, "Sesión requerida")
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		utils.ErrorJSON(w, 400, "ID inválido")
+		return
+	}
+	var in ActualizarTrabajadorInput
+	if err = json.NewDecoder(r.Body).Decode(&in); err != nil {
+		utils.ErrorJSON(w, 400, "Cuerpo JSON inválido")
+		return
+	}
+	t, err := h.service.Actualizar(r.Context(), c.SedeID, id, in)
+	if err != nil {
+		utils.WriteError(w, err)
+		return
+	}
+	utils.JSON(w, 200, t)
+}
+
+func (h *Handler) DarBaja(w http.ResponseWriter, r *http.Request) {
+	c, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		utils.ErrorJSON(w, 401, "Sesión requerida")
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		utils.ErrorJSON(w, 400, "ID inválido")
+		return
+	}
+	if err = h.service.DarBaja(r.Context(), c.SedeID, id); err != nil {
+		utils.WriteError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

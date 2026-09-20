@@ -23,8 +23,13 @@ type Repository interface {
 	Requisitos(ctx context.Context, idReserva uuid.UUID) ([]RequisitoDocumento, error)
 }
 
+type queryer interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
 type repository struct {
-	db *sql.DB
+	db queryer
 }
 
 func NewRepository(db *sql.DB) Repository {

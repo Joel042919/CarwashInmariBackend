@@ -18,8 +18,10 @@ var (
 
 type Service interface {
 	Crear(ctx context.Context, idSede uuid.UUID, in CrearTrabajadorInput) (*Trabajador, error)
-	Listar(ctx context.Context) ([]Trabajador, error)
-	CambiarDisponibilidad(ctx context.Context, id uuid.UUID, disponible bool) error
+	Listar(ctx context.Context, sede uuid.UUID) ([]Trabajador, error)
+	CambiarDisponibilidad(ctx context.Context, sede, id uuid.UUID, disponible bool) error
+	Actualizar(ctx context.Context, sede, id uuid.UUID, in ActualizarTrabajadorInput) (*Trabajador, error)
+	DarBaja(ctx context.Context, sede, id uuid.UUID) error
 }
 
 type service struct {
@@ -31,39 +33,15 @@ func NewService(repo Repository) Service {
 }
 
 func (s *service) Crear(ctx context.Context, idSede uuid.UUID, in CrearTrabajadorInput) (*Trabajador, error) {
-	nombre := strings.TrimSpace(in.Nombre)
-	apellido := strings.TrimSpace(in.Apellido)
-	correo := strings.ToLower(strings.TrimSpace(in.Correo))
-	dni := strings.TrimSpace(in.DNI)
-
-	if nombre == "" || apellido == "" || len(nombre) > 100 || len(apellido) > 100 {
-		return nil, utils.BadRequest("el nombre y el apellido son obligatorios")
+	if len(in.Contrasena) < 6 || len(in.Contrasena) > 72 {
+		return nil, utils.BadRequest("la contrase?a debe tener entre 6 y 72 bytes")
 	}
-	if !correoValido.MatchString(correo) || len(correo) > 150 {
-		return nil, utils.BadRequest("el correo electrónico no es válido")
+	if strings.TrimSpace(in.FechaContratacion) == "" {
+		in.FechaContratacion = time.Now().In(utils.ZonaNegocio).Format("2006-01-02")
 	}
-	if !dniValido.MatchString(dni) {
-		return nil, utils.BadRequest("el documento de identidad debe tener entre 6 y 20 caracteres")
-	}
-	if len(in.Contrasena) < 6 {
-		return nil, utils.BadRequest("la contraseña debe tener al menos 6 caracteres")
-	}
-
-	fecha := strings.TrimSpace(in.FechaContratacion)
-	if fecha == "" {
-		fecha = time.Now().Format("2006-01-02")
-	} else if _, err := utils.ParseFecha(fecha); err != nil {
-		return nil, utils.BadRequest(err.Error())
-	}
-
-	var telefono *string
-	if in.Telefono != nil {
-		if t := strings.TrimSpace(*in.Telefono); t != "" {
-			if len(t) > 20 {
-				return nil, utils.BadRequest("el teléfono no puede superar 20 caracteres")
-			}
-			telefono = &t
-		}
+	datos, err := validarDatos(ActualizarTrabajadorInput{Nombre: in.Nombre, Apellido: in.Apellido, Correo: in.Correo, Telefono: in.Telefono, DNI: in.DNI, FechaContratacion: in.FechaContratacion})
+	if err != nil {
+		return nil, err
 	}
 
 	hash, err := utils.HashPassword(in.Contrasena)
@@ -73,13 +51,14 @@ func (s *service) Crear(ctx context.Context, idSede uuid.UUID, in CrearTrabajado
 
 	t := &Trabajador{
 		IDUsuario:         uuid.New(),
-		Nombre:            nombre,
-		Apellido:          apellido,
-		Correo:            correo,
-		Telefono:          telefono,
-		DNI:               dni,
-		FechaContratacion: fecha,
+		Nombre:            datos.Nombre,
+		Apellido:          datos.Apellido,
+		Correo:            datos.Correo,
+		Telefono:          datos.Telefono,
+		DNI:               datos.DNI,
+		FechaContratacion: datos.FechaContratacion,
 		Disponible:        true,
+		Activo:            true,
 	}
 	if err := s.repo.Crear(ctx, idSede, t, hash); err != nil {
 		if utils.IsUniqueViolation(err) {
@@ -90,12 +69,12 @@ func (s *service) Crear(ctx context.Context, idSede uuid.UUID, in CrearTrabajado
 	return t, nil
 }
 
-func (s *service) Listar(ctx context.Context) ([]Trabajador, error) {
-	return s.repo.Listar(ctx)
+func (s *service) Listar(ctx context.Context, sede uuid.UUID) ([]Trabajador, error) {
+	return s.repo.Listar(ctx, sede)
 }
 
-func (s *service) CambiarDisponibilidad(ctx context.Context, id uuid.UUID, disponible bool) error {
-	ok, err := s.repo.CambiarDisponibilidad(ctx, id, disponible)
+func (s *service) CambiarDisponibilidad(ctx context.Context, sede, id uuid.UUID, disponible bool) error {
+	ok, err := s.repo.CambiarDisponibilidad(ctx, sede, id, disponible)
 	if err != nil {
 		return err
 	}
@@ -103,4 +82,51 @@ func (s *service) CambiarDisponibilidad(ctx context.Context, id uuid.UUID, dispo
 		return utils.NotFound("trabajador no encontrado")
 	}
 	return nil
+}
+
+func (s *service) Actualizar(ctx context.Context, sede, id uuid.UUID, in ActualizarTrabajadorInput) (*Trabajador, error) {
+	in, err := validarDatos(in)
+	if err != nil {
+		return nil, err
+	}
+	t, err := s.repo.Actualizar(ctx, sede, id, in)
+	if utils.IsUniqueViolation(err) {
+		return nil, utils.Conflict("ya existe un usuario con ese correo o documento de identidad")
+	}
+	return t, err
+}
+
+func (s *service) DarBaja(ctx context.Context, sede, id uuid.UUID) error {
+	return s.repo.DarBaja(ctx, sede, id)
+}
+
+func validarDatos(in ActualizarTrabajadorInput) (ActualizarTrabajadorInput, error) {
+	in.Nombre = strings.TrimSpace(in.Nombre)
+	in.Apellido = strings.TrimSpace(in.Apellido)
+	in.Correo = strings.ToLower(strings.TrimSpace(in.Correo))
+	in.FechaContratacion = strings.TrimSpace(in.FechaContratacion)
+	in.DNI = strings.TrimSpace(in.DNI)
+	if in.Nombre == "" || in.Apellido == "" || len(in.Nombre) > 100 || len(in.Apellido) > 100 {
+		return in, utils.BadRequest("nombre y apellido son obligatorios y admiten hasta 100 caracteres")
+	}
+	if !correoValido.MatchString(in.Correo) || len(in.Correo) > 150 {
+		return in, utils.BadRequest("el correo electrónico no es válido")
+	}
+	if !dniValido.MatchString(in.DNI) {
+		return in, utils.BadRequest("documento de identidad inválido")
+	}
+	if _, err := utils.ParseRangoFechas(in.FechaContratacion, ""); err != nil || in.FechaContratacion == "" {
+		return in, utils.BadRequest("fecha de contratación inválida")
+	}
+	if in.Telefono != nil {
+		telefono := strings.TrimSpace(*in.Telefono)
+		if len(telefono) > 20 {
+			return in, utils.BadRequest("el teléfono admite hasta 20 caracteres")
+		}
+		in.Telefono = nil
+		if telefono != "" {
+			in.Telefono = &telefono
+		}
+	}
+	return in, nil
 }

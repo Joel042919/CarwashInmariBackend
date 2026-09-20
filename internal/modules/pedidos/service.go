@@ -14,9 +14,8 @@ const (
 	maxCantidadPorItem = 999 // detalle_pedido.cantidad es smallint
 )
 
-// TODO(Ingrid): RF-11 pagos. Hoy el administrador marca el pedido como "pagado" a mano
-// (CambiarEstado); al implementar pagos, ese cambio debe salir del registro en la tabla
-// pagos (que ya admite id_pedido) junto con su comprobante interno.
+// El estado pagado se establece únicamente desde RF-11, dentro de la misma
+// transacción que registra el pago y su comprobante interno.
 type Service interface {
 	CrearPedido(ctx context.Context, idCliente uuid.UUID, req CrearPedidoRequest) (*Pedido, error)
 	ListarMisPedidos(ctx context.Context, idCliente uuid.UUID) ([]Pedido, error)
@@ -98,6 +97,9 @@ func (s *service) CancelarMiPedido(ctx context.Context, idCliente, id uuid.UUID)
 }
 
 func (s *service) CambiarEstado(ctx context.Context, id uuid.UUID, nuevo string) (*Pedido, error) {
+	if strings.TrimSpace(nuevo) == EstadoPagado {
+		return nil, utils.Conflict("registra el cobro desde el módulo de pagos; el pedido se marcará como pagado automáticamente")
+	}
 	if !estadoValido(nuevo) || nuevo == EstadoRegistrado {
 		return nil, utils.BadRequest("estado de pedido no válido")
 	}

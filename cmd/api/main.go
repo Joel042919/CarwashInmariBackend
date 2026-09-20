@@ -16,13 +16,16 @@ import (
 	"github.com/joho/godotenv"
 
 	"carwashinmaribackend/internal/middleware"
+	"carwashinmaribackend/internal/modules/atenciones"
 	"carwashinmaribackend/internal/modules/auth"
 	"carwashinmaribackend/internal/modules/clientes"
 	"carwashinmaribackend/internal/modules/documentos"
+	"carwashinmaribackend/internal/modules/espacios"
+	"carwashinmaribackend/internal/modules/pagos"
 	"carwashinmaribackend/internal/modules/pedidos"
 	"carwashinmaribackend/internal/modules/productos"
 	"carwashinmaribackend/internal/modules/reclamos"
-	"carwashinmaribackend/internal/modules/espacios"
+	"carwashinmaribackend/internal/modules/reportes"
 	"carwashinmaribackend/internal/modules/reservas"
 	"carwashinmaribackend/internal/modules/servicios"
 	"carwashinmaribackend/internal/modules/trabajadores"
@@ -126,6 +129,7 @@ func main() {
 		// Rutas protegidas por JWT
 		api.Group(func(protected chi.Router) {
 			protected.Use(middleware.AuthMiddleware)
+			protected.Use(middleware.ActiveUser(db))
 
 			// RF-02: Clientes
 			protected.Get("/clientes/perfil", clientesHandler.ObtenerMiPerfil)
@@ -151,6 +155,7 @@ func main() {
 			documentos.RegisterRoutes(protected, db, r2Client)
 			productos.RegisterRoutes(protected, db)
 			pedidos.RegisterRoutes(protected, db)
+			pagos.RegisterRoutes(protected, db)
 
 			// Para que el flujo de reservas funcione se implementó una
 			// primera versión de partes asignados a otros del grupo. Falta que cada uno la
@@ -166,10 +171,10 @@ func main() {
 			// Mego (RF-03, RF-08, RF-10): solo hay un registro mínimo de vehículos.
 			//   TODO(Mego): RF-03 completo, RF-08 evidencias y RF-10 trazabilidad.
 			vehiculos.RegisterRoutes(protected, db)
-			// Ingrid (RF-11, RF-13, RF-14): solo hay un alta mínima de trabajadores.
-			//   TODO(Ingrid): RF-13 completo, RF-11 pagos y RF-14 reportes.
+			// Ingrid (RF-11, RF-13, RF-14): pagos, personal, atenciones e indicadores.
 			trabajadores.RegisterRoutes(protected, db)
-			// Ingrid: pagos.RegisterRoutes(protected, db)
+			atenciones.RegisterRoutes(protected, db)
+			reportes.RegisterRoutes(protected, db)
 		})
 	})
 

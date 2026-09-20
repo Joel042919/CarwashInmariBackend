@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/google/uuid"
@@ -37,7 +38,7 @@ type Repository interface {
 	// Consultas
 	ObtenerReserva(ctx context.Context, id uuid.UUID) (*Reserva, error)
 	ListarPorCliente(ctx context.Context, idCliente uuid.UUID) ([]Reserva, error)
-	ListarTodas(ctx context.Context, estado, fecha string) ([]Reserva, error)
+	ListarTodas(ctx context.Context, sede uuid.UUID, estado, fecha string) ([]Reserva, error)
 	TrabajadoresParaReserva(ctx context.Context, r *Reserva) ([]TrabajadorDisponible, error)
 }
 
@@ -261,6 +262,9 @@ func (r *repository) ReprogramarReserva(ctx context.Context, id uuid.UUID, fecha
 		return err
 	}
 	defer tx.Rollback()
+	if err := bloquearReservaModificable(ctx, tx, id); err != nil {
+		return err
+	}
 
 	if err := bloquear(ctx, tx, "espacio:"+idEspacio.String()+":"+fecha); err != nil {
 		return err
@@ -280,6 +284,13 @@ func (r *repository) ReprogramarReserva(ctx context.Context, id uuid.UUID, fecha
 		WHERE id_reserva = $1`,
 		id, fecha, inicio, fin, idEspacio, EstadoReprogramada)
 	if err != nil {
+		return err
+	}
+	// La nueva fecha exige confirmar otra vez al personal, evitando cruces heredados.
+	if _, err := tx.ExecContext(ctx, `DELETE FROM asignaciones_trabajadores WHERE id_atencion IN (SELECT id_atencion FROM atenciones WHERE id_reserva=$1)`, id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE reservas SET id_trabajador=NULL WHERE id_reserva=$1`, id); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -313,6 +324,9 @@ func (r *repository) CancelarReserva(ctx context.Context, id uuid.UUID, motivo s
 		return err
 	}
 	defer tx.Rollback()
+	if err := bloquearReservaModificable(ctx, tx, id); err != nil {
+		return err
+	}
 
 	if err := borrarAtencion(ctx, tx, id); err != nil {
 		return err
@@ -345,6 +359,12 @@ func (r *repository) ProgramarReserva(ctx context.Context, id, idAdmin uuid.UUID
 	if estado == EstadoCancelada || estado == EstadoCompletada {
 		return utils.Conflict("no se puede programar una reserva " + estado)
 	}
+	if err := bloquearReservaModificable(ctx, tx, id); err != nil {
+		return err
+	}
+	// El orden estable de filas evita interbloqueos al asignar equipos.
+	trabajadores = append([]uuid.UUID(nil), trabajadores...)
+	sort.Slice(trabajadores, func(i, j int) bool { return trabajadores[i].String() < trabajadores[j].String() })
 
 	for _, idTrab := range trabajadores {
 		if err := bloquear(ctx, tx, "trabajador:"+idTrab.String()+":"+fecha); err != nil {
@@ -355,7 +375,9 @@ func (r *repository) ProgramarReserva(ctx context.Context, id, idAdmin uuid.UUID
 		err := tx.QueryRowContext(ctx, `
 			SELECT t.disponible FROM trabajadores t
 			INNER JOIN usuarios u ON u.id_usuario = t.id_usuario
-			WHERE t.id_usuario = $1 AND u.activo AND t.fecha_cese IS NULL`, idTrab).Scan(&disponible)
+			WHERE t.id_usuario = $1 AND u.activo AND t.fecha_cese IS NULL
+            AND u.id_sede=(SELECT id_sede FROM usuarios WHERE id_usuario=$2)
+            FOR UPDATE OF t, u`, idTrab, idAdmin).Scan(&disponible)
 		if errors.Is(err, sql.ErrNoRows) {
 			return utils.BadRequest("uno de los trabajadores no existe o está dado de baja")
 		}
@@ -540,11 +562,12 @@ func (r *repository) ListarPorCliente(ctx context.Context, idCliente uuid.UUID) 
 		ORDER BY r.fecha_reserva DESC, r.hora_inicio DESC`, idCliente)
 }
 
-func (r *repository) ListarTodas(ctx context.Context, estado, fecha string) ([]Reserva, error) {
+func (r *repository) ListarTodas(ctx context.Context, sede uuid.UUID, estado, fecha string) ([]Reserva, error) {
 	return r.listar(ctx, selectReserva+`
 		WHERE ($1 = '' OR r.estado::text = $1)
-		  AND ($2 = '' OR r.fecha_reserva = $2::date)
-		ORDER BY r.fecha_reserva DESC, r.hora_inicio DESC`, estado, fecha)
+		  AND ($2 = '' OR r.fecha_reserva = NULLIF($2,'')::date)
+        AND u.id_sede=$3
+		ORDER BY r.fecha_reserva DESC, r.hora_inicio DESC`, estado, fecha, sede)
 }
 
 // sqlTrabajadorOcupado: parámetros idTrabajador, idReservaExcluida, fecha, inicio, fin.
@@ -573,6 +596,7 @@ func (r *repository) TrabajadoresParaReserva(ctx context.Context, x *Reserva) ([
 		FROM trabajadores t
 		INNER JOIN usuarios u ON u.id_usuario = t.id_usuario
 		WHERE u.activo AND t.fecha_cese IS NULL
+        AND u.id_sede=(SELECT uc.id_sede FROM reservas rr JOIN usuarios uc ON uc.id_usuario=rr.id_cliente WHERE rr.id_reserva=$1)
 		ORDER BY u.nombre, u.apellido`,
 		x.IDReserva, x.FechaReserva, x.HoraInicio, x.HoraFin)
 	if err != nil {

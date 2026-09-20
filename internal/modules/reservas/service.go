@@ -31,7 +31,7 @@ type Service interface {
 	// Cancelar: si idCliente no es nil, la reserva debe pertenecerle (cancela el cliente); si es nil cancela el admin.
 	Cancelar(ctx context.Context, idCliente *uuid.UUID, id uuid.UUID, motivo string) (*Reserva, error)
 
-	ListarTodas(ctx context.Context, estado, fecha string) ([]Reserva, error)
+	ListarTodas(ctx context.Context, sede uuid.UUID, estado, fecha string) ([]Reserva, error)
 	TrabajadoresDisponibles(ctx context.Context, id uuid.UUID) ([]TrabajadorDisponible, error)
 	Programar(ctx context.Context, id, idAdmin uuid.UUID, in ProgramarInput) (*Reserva, error)
 }
@@ -358,7 +358,7 @@ func (s *service) Cancelar(ctx context.Context, idCliente *uuid.UUID, id uuid.UU
 
 // ---------------------------------------------------------------- administrador (RF-09)
 
-func (s *service) ListarTodas(ctx context.Context, estado, fecha string) ([]Reserva, error) {
+func (s *service) ListarTodas(ctx context.Context, sede uuid.UUID, estado, fecha string) ([]Reserva, error) {
 	switch estado {
 	case "", EstadoPendiente, EstadoConfirmada, EstadoReprogramada, EstadoCancelada, EstadoCompletada:
 	default:
@@ -369,7 +369,7 @@ func (s *service) ListarTodas(ctx context.Context, estado, fecha string) ([]Rese
 			return nil, utils.BadRequest(err.Error())
 		}
 	}
-	return s.repo.ListarTodas(ctx, estado, fecha)
+	return s.repo.ListarTodas(ctx, sede, estado, fecha)
 }
 
 func (s *service) TrabajadoresDisponibles(ctx context.Context, id uuid.UUID) ([]TrabajadorDisponible, error) {
