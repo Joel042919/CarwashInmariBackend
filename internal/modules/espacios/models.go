@@ -17,8 +17,9 @@ type Espacio struct {
 }
 
 type EspacioInput struct {
-	Codigo string `json:"codigo"`
-	Activo *bool  `json:"activo"`
+	Codigo   string    `json:"codigo"`
+	Activo   *bool     `json:"activo"`
+	Horarios []Horario `json:"horarios"` // opcional al crear: define el horario semanal de una vez
 }
 
 type HorariosInput struct {

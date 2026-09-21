@@ -39,7 +39,15 @@ type Repository interface {
 	ObtenerReserva(ctx context.Context, id uuid.UUID) (*Reserva, error)
 	ListarPorCliente(ctx context.Context, idCliente uuid.UUID) ([]Reserva, error)
 	ListarTodas(ctx context.Context, sede uuid.UUID, estado, fecha string) ([]Reserva, error)
+	EspaciosParaAgenda(ctx context.Context) ([]AgendaEspacioMeta, error)
 	TrabajadoresParaReserva(ctx context.Context, r *Reserva) ([]TrabajadorDisponible, error)
+}
+
+// AgendaEspacioMeta es el encabezado de un espacio en la agenda del día.
+type AgendaEspacioMeta struct {
+	IDEspacio uuid.UUID
+	Codigo    string
+	Activo    bool
 }
 
 type repository struct {
@@ -277,10 +285,15 @@ func (r *repository) ReprogramarReserva(ctx context.Context, id uuid.UUID, fecha
 		return errHorarioOcupado
 	}
 
+	// Al reprogramar se invalida la programación previa: el admin debe volver a asignar.
+	if err := borrarAtencion(ctx, tx, id); err != nil {
+		return err
+	}
+
 	_, err = tx.ExecContext(ctx, `
 		UPDATE reservas
 		SET fecha_reserva = $2::date, hora_inicio = $3::time, hora_fin = $4::time,
-			id_espacio = $5, estado = $6
+			id_espacio = $5, estado = $6, id_trabajador = NULL
 		WHERE id_reserva = $1`,
 		id, fecha, inicio, fin, idEspacio, EstadoReprogramada)
 	if err != nil {
@@ -565,9 +578,29 @@ func (r *repository) ListarPorCliente(ctx context.Context, idCliente uuid.UUID) 
 func (r *repository) ListarTodas(ctx context.Context, sede uuid.UUID, estado, fecha string) ([]Reserva, error) {
 	return r.listar(ctx, selectReserva+`
 		WHERE ($1 = '' OR r.estado::text = $1)
-		  AND ($2 = '' OR r.fecha_reserva = NULLIF($2,'')::date)
-        AND u.id_sede=$3
-		ORDER BY r.fecha_reserva DESC, r.hora_inicio DESC`, estado, fecha, sede)
+		  AND ($2 = '' OR r.fecha_reserva = $2::date)
+		ORDER BY r.fecha_reserva DESC, r.hora_inicio ASC, e.codigo ASC`, estado, fecha)
+}
+
+func (r *repository) EspaciosParaAgenda(ctx context.Context) ([]AgendaEspacioMeta, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id_espacio, codigo, activo FROM espacios_lavado
+		WHERE activo
+		ORDER BY codigo`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	lista := []AgendaEspacioMeta{}
+	for rows.Next() {
+		var e AgendaEspacioMeta
+		if err := rows.Scan(&e.IDEspacio, &e.Codigo, &e.Activo); err != nil {
+			return nil, err
+		}
+		lista = append(lista, e)
+	}
+	return lista, rows.Err()
 }
 
 // sqlTrabajadorOcupado: parámetros idTrabajador, idReservaExcluida, fecha, inicio, fin.
