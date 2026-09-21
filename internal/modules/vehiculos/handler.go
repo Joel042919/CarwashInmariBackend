@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"carwashinmaribackend/internal/middleware"
 	"carwashinmaribackend/internal/utils"
@@ -33,6 +34,8 @@ func RegisterRoutes(r chi.Router, db *sql.DB) {
 		cliente.Use(middleware.RequireRoles("cliente"))
 		cliente.Post("/vehiculos", h.Registrar)
 		cliente.Get("/vehiculos/mis-vehiculos", h.MisVehiculos)
+		cliente.Put("/vehiculos/{id}", h.Actualizar)
+		cliente.Delete("/vehiculos/{id}", h.Eliminar)
 	})
 }
 
@@ -67,4 +70,46 @@ func (h *Handler) MisVehiculos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	utils.JSON(w, http.StatusOK, lista)
+}
+
+func (h *Handler) Actualizar(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		utils.ErrorJSON(w, http.StatusUnauthorized, "Sesión requerida")
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		utils.ErrorJSON(w, http.StatusBadRequest, "ID de vehículo inválido")
+		return
+	}
+	var in VehiculoInput
+	if err = json.NewDecoder(r.Body).Decode(&in); err != nil {
+		utils.ErrorJSON(w, http.StatusBadRequest, "Cuerpo JSON inválido")
+		return
+	}
+	v, err := h.service.Actualizar(r.Context(), claims.UserID, id, in)
+	if err != nil {
+		utils.WriteError(w, err)
+		return
+	}
+	utils.JSON(w, http.StatusOK, v)
+}
+
+func (h *Handler) Eliminar(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		utils.ErrorJSON(w, http.StatusUnauthorized, "Sesión requerida")
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		utils.ErrorJSON(w, http.StatusBadRequest, "ID de vehículo inválido")
+		return
+	}
+	if err = h.service.Eliminar(r.Context(), claims.UserID, id); err != nil {
+		utils.WriteError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

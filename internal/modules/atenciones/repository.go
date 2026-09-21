@@ -27,7 +27,7 @@ const relaciones = ` FROM atenciones a JOIN reservas r ON r.id_reserva=a.id_rese
 
 func (repo *repository) Listar(ctx context.Context, c utils.CustomClaims, f Filtro) ([]Atencion, error) {
 	rows, err := repo.db.QueryContext(ctx, `SELECT a.id_atencion,r.id_reserva,a.estado::text,r.estado::text,
- r.fecha_reserva::text,to_char(r.hora_inicio,'HH24:MI'),to_char(r.hora_fin,'HH24:MI'),v.placa,
+ r.fecha_reserva::text,to_char(r.hora_inicio,'HH24:MI'),to_char(r.hora_fin,'HH24:MI'),v.placa,v.id_vehiculo,
  u.nombre || ' ' || u.apellido,a.fecha_inicio_real,a.fecha_fin_real,
  COALESCE((SELECT json_agg(json_build_object('nombre',s.nombre,'cantidad',rs.cantidad) ORDER BY s.nombre)
  FROM reserva_servicios rs JOIN servicios s ON s.id_servicio=rs.id_servicio WHERE rs.id_reserva=r.id_reserva),'[]'::json)
@@ -45,7 +45,7 @@ func (repo *repository) Listar(ctx context.Context, c utils.CustomClaims, f Filt
 	for rows.Next() {
 		var a Atencion
 		var servicios []byte
-		if err = rows.Scan(&a.ID, &a.IDReserva, &a.Estado, &a.EstadoReserva, &a.Fecha, &a.HoraInicio, &a.HoraFin, &a.Placa, &a.Cliente, &a.InicioReal, &a.FinReal, &servicios); err != nil {
+		if err = rows.Scan(&a.ID, &a.IDReserva, &a.Estado, &a.EstadoReserva, &a.Fecha, &a.HoraInicio, &a.HoraFin, &a.Placa, &a.IDVehiculo, &a.Cliente, &a.InicioReal, &a.FinReal, &servicios); err != nil {
 			return nil, err
 		}
 		if err = json.Unmarshal(servicios, &a.Servicios); err != nil {
@@ -124,7 +124,7 @@ func (repo *repository) CambiarEstado(ctx context.Context, c utils.CustomClaims,
 	if err != nil {
 		return err
 	}
-	if nuevo == Finalizada {
+	if nuevo == "entregada" {
 		if _, err = tx.ExecContext(ctx, `UPDATE reservas SET estado='completada' WHERE id_reserva=$1`, reserva); err != nil {
 			return err
 		}

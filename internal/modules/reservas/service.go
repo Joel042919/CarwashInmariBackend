@@ -391,7 +391,7 @@ func (s *service) Agenda(ctx context.Context, fecha string) (*AgendaDia, error) 
 	if err != nil {
 		return nil, err
 	}
-	reservas, err := s.repo.ListarTodas(ctx, "", fecha)
+	reservas, err := s.repo.ListarTodas(ctx, uuid.Nil, "", fecha)
 	if err != nil {
 		return nil, err
 	}

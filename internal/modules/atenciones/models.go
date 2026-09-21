@@ -32,6 +32,7 @@ type Atencion struct {
 	HoraInicio    string     `json:"hora_inicio"`
 	HoraFin       string     `json:"hora_fin"`
 	Placa         string     `json:"placa"`
+	IDVehiculo    uuid.UUID  `json:"id_vehiculo"`
 	Cliente       string     `json:"cliente"`
 	InicioReal    *time.Time `json:"fecha_inicio_real"`
 	FinReal       *time.Time `json:"fecha_fin_real"`

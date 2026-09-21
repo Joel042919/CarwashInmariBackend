@@ -14,7 +14,10 @@ func validarTransicion(actual, nuevo, reserva string) error {
 	if reserva != "confirmada" {
 		return utils.Conflict("la reserva debe estar confirmada antes de operar la atención")
 	}
-	if (actual == Programada && nuevo == EnProceso) || (actual == EnProceso && nuevo == Finalizada) {
+	if (actual == Programada && nuevo == EnProceso) ||
+		(actual == EnProceso && (nuevo == "en_pausa" || nuevo == Finalizada)) ||
+		(actual == "en_pausa" && nuevo == EnProceso) ||
+		(actual == Finalizada && nuevo == "entregada") {
 		return nil
 	}
 	return utils.Conflict("transición de atención no permitida")
@@ -33,7 +36,7 @@ func (s *Service) CambiarEstado(ctx context.Context, actor utils.CustomClaims, i
 	if actor.Rol != "administrador" && actor.Rol != "trabajador" {
 		return &utils.AppError{Status: 403, Msg: "No puedes modificar atenciones"}
 	}
-	if nuevo != EnProceso && nuevo != Finalizada {
+	if nuevo != EnProceso && nuevo != Finalizada && nuevo != "en_pausa" && nuevo != "entregada" {
 		return utils.BadRequest("estado de destino inválido")
 	}
 	return s.repo.CambiarEstado(ctx, actor, id, nuevo)

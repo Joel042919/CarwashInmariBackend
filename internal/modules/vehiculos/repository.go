@@ -10,6 +10,43 @@ import (
 type Repository interface {
 	Crear(ctx context.Context, v *Vehiculo) error
 	ListarPorCliente(ctx context.Context, idCliente uuid.UUID) ([]Vehiculo, error)
+	Actualizar(ctx context.Context, v *Vehiculo) error
+	Eliminar(ctx context.Context, idVehiculo, idCliente uuid.UUID) (bool, error)
+}
+
+func (r *repository) Actualizar(ctx context.Context, v *Vehiculo) error {
+	result, err := r.db.ExecContext(ctx, `UPDATE vehiculos
+		SET placa=$3, marca=$4, modelo=$5, color=$6, anio=$7, tipo_vehiculo=$8
+		WHERE id_vehiculo=$1 AND id_cliente=$2`,
+		v.IDVehiculo, v.IDCliente, v.Placa, v.Marca, v.Modelo, v.Color, v.Anio, v.TipoVehiculo)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func (r *repository) Eliminar(ctx context.Context, idVehiculo, idCliente uuid.UUID) (bool, error) {
+	// Un vehículo con reservas conserva su historial para no romper la trazabilidad.
+	var usado bool
+	if err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM reservas WHERE id_vehiculo=$1)`, idVehiculo).Scan(&usado); err != nil {
+		return false, err
+	}
+	if usado {
+		return false, nil
+	}
+	result, err := r.db.ExecContext(ctx, `DELETE FROM vehiculos WHERE id_vehiculo=$1 AND id_cliente=$2`, idVehiculo, idCliente)
+	if err != nil {
+		return false, err
+	}
+	n, err := result.RowsAffected()
+	return n > 0, err
 }
 
 type repository struct {

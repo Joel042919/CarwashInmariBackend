@@ -21,6 +21,7 @@ import (
 	"carwashinmaribackend/internal/modules/clientes"
 	"carwashinmaribackend/internal/modules/documentos"
 	"carwashinmaribackend/internal/modules/espacios"
+	"carwashinmaribackend/internal/modules/evidencias"
 	"carwashinmaribackend/internal/modules/pagos"
 	"carwashinmaribackend/internal/modules/pedidos"
 	"carwashinmaribackend/internal/modules/productos"
@@ -166,6 +167,8 @@ func main() {
 			// Ingrid (RF-11, RF-13, RF-14): pagos, personal, atenciones e indicadores.
 			trabajadores.RegisterRoutes(protected, db)
 			atenciones.RegisterRoutes(protected, db)
+			// RF-08: fotos y descripciones de daños asociados a una atención y su vehículo.
+			evidencias.RegisterRoutes(protected, db, r2Client)
 			reportes.RegisterRoutes(protected, db)
 		})
 	})
