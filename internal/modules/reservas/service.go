@@ -32,6 +32,7 @@ type Service interface {
 	Cancelar(ctx context.Context, idCliente *uuid.UUID, id uuid.UUID, motivo string) (*Reserva, error)
 
 	ListarTodas(ctx context.Context, estado, fecha string) ([]Reserva, error)
+	Agenda(ctx context.Context, fecha string) (*AgendaDia, error)
 	TrabajadoresDisponibles(ctx context.Context, id uuid.UUID) ([]TrabajadorDisponible, error)
 	Programar(ctx context.Context, id, idAdmin uuid.UUID, in ProgramarInput) (*Reserva, error)
 }
@@ -255,6 +256,9 @@ func (s *service) Crear(ctx context.Context, idCliente uuid.UUID, in CrearReserv
 
 	var obs *string
 	if t := strings.TrimSpace(in.Observaciones); t != "" {
+		if len(t) > 300 {
+			return nil, utils.BadRequest("las observaciones no pueden superar 300 caracteres")
+		}
 		obs = &t
 	}
 
@@ -370,6 +374,50 @@ func (s *service) ListarTodas(ctx context.Context, estado, fecha string) ([]Rese
 		}
 	}
 	return s.repo.ListarTodas(ctx, estado, fecha)
+}
+
+// Agenda arma la planificación del día: todos los espacios activos (aunque no tengan
+// reservas) y sus reservas no canceladas ordenadas por hora de inicio.
+func (s *service) Agenda(ctx context.Context, fecha string) (*AgendaDia, error) {
+	fecha = strings.TrimSpace(fecha)
+	if fecha == "" {
+		fecha = s.ahora().Format("2006-01-02")
+	}
+	if _, err := utils.ParseFecha(fecha); err != nil {
+		return nil, utils.BadRequest(err.Error())
+	}
+
+	espacios, err := s.repo.EspaciosParaAgenda(ctx)
+	if err != nil {
+		return nil, err
+	}
+	reservas, err := s.repo.ListarTodas(ctx, "", fecha)
+	if err != nil {
+		return nil, err
+	}
+
+	porEspacio := map[uuid.UUID][]Reserva{}
+	for _, r := range reservas {
+		if r.Estado == EstadoCancelada {
+			continue
+		}
+		porEspacio[r.IDEspacio] = append(porEspacio[r.IDEspacio], r)
+	}
+
+	out := &AgendaDia{Fecha: fecha, Espacios: make([]AgendaEspacio, 0, len(espacios))}
+	for _, e := range espacios {
+		lista := porEspacio[e.IDEspacio]
+		if lista == nil {
+			lista = []Reserva{}
+		}
+		out.Espacios = append(out.Espacios, AgendaEspacio{
+			IDEspacio: e.IDEspacio,
+			Codigo:    e.Codigo,
+			Activo:    e.Activo,
+			Reservas:  lista,
+		})
+	}
+	return out, nil
 }
 
 func (s *service) TrabajadoresDisponibles(ctx context.Context, id uuid.UUID) ([]TrabajadorDisponible, error) {

@@ -115,3 +115,16 @@ type TrabajadorDisponible struct {
 	Disponible   bool      `json:"disponible"` // marcado como disponible en su ficha
 	Ocupado      bool      `json:"ocupado"`    // ya tiene otra atención que se cruza con este horario
 }
+
+// AgendaDia es la planificación del día agrupada por espacio de lavado (RF-09).
+type AgendaDia struct {
+	Fecha    string          `json:"fecha"`
+	Espacios []AgendaEspacio `json:"espacios"`
+}
+
+type AgendaEspacio struct {
+	IDEspacio uuid.UUID `json:"id_espacio"`
+	Codigo    string    `json:"codigo"`
+	Activo    bool      `json:"activo"`
+	Reservas  []Reserva `json:"reservas"`
+}

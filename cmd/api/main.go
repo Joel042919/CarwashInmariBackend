@@ -152,15 +152,7 @@ func main() {
 			productos.RegisterRoutes(protected, db)
 			pedidos.RegisterRoutes(protected, db)
 
-			// Para que el flujo de reservas funcione se implementó una
-			// primera versión de partes asignados a otros del grupo. Falta que cada uno la
-			// revise y complete su requerimiento:
-			//
-			// Erick (RF-05, RF-06, RF-09): se implementó una primera versión completa de
-			//   los tres requerimientos (espacios y horarios, reservas, programación y
-			//   asignación de personal) para poder probar el flujo de punta a punta.
-			//   TODO(Erick): revísala y adáptala a tu criterio; puedes modificarla o
-			//   reemplazarla por completo (ver comentarios en esos módulos).
+			// RF-05 / RF-06 / RF-09 (Erick): espacios, horarios, reservas y programación.
 			espacios.RegisterRoutes(protected, db)
 			reservas.RegisterRoutes(protected, db, documentos.NewChecker(db))
 			// Mego (RF-03, RF-08, RF-10): solo hay un registro mínimo de vehículos.

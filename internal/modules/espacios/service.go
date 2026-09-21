@@ -14,6 +14,7 @@ const maxTramosPorDia = 6
 
 type Service interface {
 	Listar(ctx context.Context, soloActivos bool) ([]Espacio, error)
+	Obtener(ctx context.Context, id uuid.UUID) (*Espacio, error)
 	Crear(ctx context.Context, in EspacioInput) (*Espacio, error)
 	Actualizar(ctx context.Context, id uuid.UUID, in EspacioInput) (*Espacio, error)
 	ReemplazarHorarios(ctx context.Context, id uuid.UUID, in HorariosInput) (*Espacio, error)
@@ -29,6 +30,17 @@ func NewService(repo Repository) Service {
 
 func (s *service) Listar(ctx context.Context, soloActivos bool) ([]Espacio, error) {
 	return s.repo.Listar(ctx, soloActivos)
+}
+
+func (s *service) Obtener(ctx context.Context, id uuid.UUID) (*Espacio, error) {
+	e, err := s.repo.Obtener(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if e == nil {
+		return nil, utils.NotFound("espacio no encontrado")
+	}
+	return e, nil
 }
 
 func validarCodigo(in *EspacioInput) error {
@@ -47,12 +59,28 @@ func (s *service) Crear(ctx context.Context, in EspacioInput) (*Espacio, error) 
 	if in.Activo != nil {
 		activo = *in.Activo
 	}
+
+	var horarios []Horario
+	if len(in.Horarios) > 0 {
+		normalizados, err := ValidarHorarios(in.Horarios)
+		if err != nil {
+			return nil, err
+		}
+		horarios = normalizados
+	}
+
 	e := &Espacio{IDEspacio: uuid.New(), Codigo: in.Codigo, Activo: activo, Horarios: []Horario{}}
 	if err := s.repo.Crear(ctx, e); err != nil {
 		if utils.IsUniqueViolation(err) {
 			return nil, utils.Conflict("ya existe un espacio con ese código")
 		}
 		return nil, err
+	}
+	if len(horarios) > 0 {
+		if err := s.repo.ReemplazarHorarios(ctx, e.IDEspacio, horarios); err != nil {
+			return nil, err
+		}
+		return s.repo.Obtener(ctx, e.IDEspacio)
 	}
 	return e, nil
 }

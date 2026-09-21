@@ -23,15 +23,14 @@ func NewHandler(service Service) *Handler {
 
 // RegisterRoutes conecta las rutas de RF-05 (espacios y horarios de atención).
 //
-// TODO(Erick): este módulo es una primera versión COMPLETA de RF-05 (espacios y horario
-// semanal), hecha para poder probar las reservas. Es tuyo: puedes modificarla o
-// reemplazarla por completo. No usa el tipo de lavadero (espacios_lavado.id_tipo_lavadero
-// está definido como texto pero es clave foránea de un uuid: corregir el esquema con Joel
-// de ser necesario). Ideas pendientes: días festivos o bloqueos puntuales de un espacio.
+// Nota de esquema: espacios_lavado.id_tipo_lavadero está mal tipado en el SQL
+// original (varchar con FK a uuid). Este módulo no lo usa; solo gestiona código,
+// activo y el horario semanal en horarios_atencion.
 func RegisterRoutes(r chi.Router, db *sql.DB) {
 	h := NewHandler(NewService(NewRepository(db)))
 
 	r.Get("/espacios", h.Listar)
+	r.Get("/espacios/{id}", h.Obtener)
 
 	r.Group(func(admin chi.Router) {
 		admin.Use(middleware.RequireRoles("administrador"))
@@ -59,6 +58,19 @@ func (h *Handler) Listar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	utils.JSON(w, http.StatusOK, lista)
+}
+
+func (h *Handler) Obtener(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	e, err := h.service.Obtener(r.Context(), id)
+	if err != nil {
+		utils.WriteError(w, err)
+		return
+	}
+	utils.JSON(w, http.StatusOK, e)
 }
 
 func (h *Handler) Crear(w http.ResponseWriter, r *http.Request) {

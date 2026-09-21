@@ -22,20 +22,16 @@ func NewHandler(service Service) *Handler {
 	return &Handler{service: service}
 }
 
-// RegisterRoutes conecta RF-06 (reservas del cliente) y RF-09 (programación y asignación del administrador).
+// RegisterRoutes conecta RF-06 (reservas del cliente) y RF-09 (programación y asignación).
 //
-// TODO(Erick): este módulo es una primera versión COMPLETA de RF-06 y RF-09, hecha para
-// que el flujo de funcione (incluido RF-07) y se pueda probar. Es tuyo: puedes
-// modificarla o reemplazarla por completo. Lo único que otras partes esperan de aquí es
-// que una reserva no se confirme sin documentos validados (ver Programar en service.go).
-// Ideas pendientes: vista de calendario para el administrador, notificaciones al cliente,
-// y una restricción en la base de datos contra cruces de horario (hoy se evitan con un
-// candado por espacio y fecha dentro de la transacción).
+// Contrato con RF-07: Programar no confirma sin documentos previos validados.
+// Los cruces de horario se evitan con pg_advisory_xact_lock por espacio+fecha
+// (y por trabajador+fecha al asignar) dentro de la transacción.
 func RegisterRoutes(r chi.Router, db *sql.DB, docs documentos.Checker) {
 	h := NewHandler(NewService(NewRepository(db), docs))
 
+	// Rutas estáticas antes de /reservas/{id} para que chi no las capture como UUID.
 	r.Get("/reservas/disponibilidad", h.Disponibilidad)
-	r.Get("/reservas/{id}", h.Obtener)
 
 	r.Group(func(cliente chi.Router) {
 		cliente.Use(middleware.RequireRoles("cliente"))
@@ -45,8 +41,11 @@ func RegisterRoutes(r chi.Router, db *sql.DB, docs documentos.Checker) {
 		cliente.Patch("/reservas/{id}/cancelar", h.CancelarCliente)
 	})
 
+	r.Get("/reservas/{id}", h.Obtener)
+
 	r.Group(func(admin chi.Router) {
 		admin.Use(middleware.RequireRoles("administrador"))
+		admin.Get("/admin/reservas/agenda", h.Agenda)
 		admin.Get("/admin/reservas", h.ListarTodas)
 		admin.Get("/admin/reservas/{id}/trabajadores", h.TrabajadoresDisponibles)
 		admin.Post("/admin/reservas/{id}/programar", h.Programar)
@@ -222,6 +221,17 @@ func (h *Handler) ListarTodas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	utils.JSON(w, http.StatusOK, lista)
+}
+
+// Agenda: GET /admin/reservas/agenda?fecha=AAAA-MM-DD
+// Vista del día agrupada por espacio (RF-09 planificación).
+func (h *Handler) Agenda(w http.ResponseWriter, r *http.Request) {
+	res, err := h.service.Agenda(r.Context(), r.URL.Query().Get("fecha"))
+	if err != nil {
+		utils.WriteError(w, err)
+		return
+	}
+	utils.JSON(w, http.StatusOK, res)
 }
 
 func (h *Handler) TrabajadoresDisponibles(w http.ResponseWriter, r *http.Request) {
