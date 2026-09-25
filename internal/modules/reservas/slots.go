@@ -13,11 +13,11 @@ func (r Rango) seCruza(otro Rango) bool {
 }
 
 // pasoSlotMin es la separación entre horas de inicio ofrecidas al cliente.
-const pasoSlotMin = 30
+const pasoSlotMin = 5
 
 // GenerarSlots devuelve los rangos de `duracion` minutos que caben dentro de los
 // tramos de atención sin cruzarse con ningún rango ocupado y que empiezan a partir
-// de `minInicio`. Las horas de inicio salen cada 30 minutos desde el comienzo de cada
+// de `minInicio`. Las horas de inicio salen cada 5 minutos desde el comienzo de cada
 // tramo y, además, justo al terminar cada reserva ocupada, para no perder huecos.
 func GenerarSlots(tramos, ocupados []Rango, duracion, minInicio int) []Rango {
 	if duracion <= 0 {

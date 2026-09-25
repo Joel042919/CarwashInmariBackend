@@ -14,7 +14,7 @@ import (
 
 const (
 	// anticipacionMin es el margen mínimo entre "ahora" y el inicio de una reserva.
-	anticipacionMin = 30
+	anticipacionMin = 5
 	// diasMaxAnticipacion es cuánto a futuro se puede reservar.
 	diasMaxAnticipacion = 90
 	maxServiciosReserva = 10

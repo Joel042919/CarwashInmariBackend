@@ -77,13 +77,13 @@ func (r *repository) ListarPendientes(ctx context.Context, sede uuid.UUID, tipo 
 	rows, err := r.db.QueryContext(ctx, `
  SELECT 'atencion',a.id_atencion,u.nombre||' '||u.apellido,v.placa||' · servicios finalizados',
  COALESCE(sum(rs.precio_unitario*rs.cantidad),0)::text,a.fecha_fin_real,
- jsonb_build_object('cliente',u.nombre||' '||u.apellido,'placa',v.placa,'servicios',
+ jsonb_build_object('cliente',u.nombre||' '||u.apellido,'placa',v.placa,'id_reserva',re.id_reserva,'fecha_reserva',re.fecha_reserva,'servicios',
    COALESCE(jsonb_agg(jsonb_build_object('nombre',s.nombre,'cantidad',rs.cantidad,'precio_unitario',rs.precio_unitario) ORDER BY s.nombre),'[]'::jsonb))
  FROM atenciones a JOIN reservas re ON re.id_reserva=a.id_reserva JOIN usuarios u ON u.id_usuario=re.id_cliente
  JOIN vehiculos v ON v.id_vehiculo=re.id_vehiculo JOIN reserva_servicios rs ON rs.id_reserva=re.id_reserva JOIN servicios s ON s.id_servicio=rs.id_servicio
  WHERE u.id_sede=$1 AND a.estado IN ('finalizada','entregada') AND re.estado='completada'
  AND NOT EXISTS(SELECT 1 FROM pagos p WHERE p.id_atencion=a.id_atencion AND p.estado='pagado')
- AND ($2='' OR $2='atencion') GROUP BY a.id_atencion,u.nombre,u.apellido,v.placa,a.fecha_fin_real
+ AND ($2='' OR $2='atencion') GROUP BY a.id_atencion,re.id_reserva,re.fecha_reserva,u.nombre,u.apellido,v.placa,a.fecha_fin_real
  UNION ALL
  SELECT 'pedido',pe.id_pedido,u.nombre||' '||u.apellido,'Pedido de productos',
  COALESCE(sum(dp.precio_unitario*dp.cantidad),0)::text,pe.fecha_registro,
@@ -154,11 +154,11 @@ func (r *repository) Registrar(ctx context.Context, sede, admin uuid.UUID, in Re
 			return nil, utils.Conflict("la atención debe estar finalizada antes de cobrar")
 		}
 		err = tx.QueryRowContext(ctx, `SELECT COALESCE(sum(rs.precio_unitario*rs.cantidad),0)::text,
- jsonb_build_object('cliente',u.nombre||' '||u.apellido,'correo',u.correo,'placa',v.placa,
+ jsonb_build_object('cliente',u.nombre||' '||u.apellido,'correo',u.correo,'placa',v.placa,'id_reserva',re.id_reserva,'fecha_reserva',re.fecha_reserva,
  'servicios',jsonb_agg(jsonb_build_object('nombre',s.nombre,'cantidad',rs.cantidad,'precio_unitario',rs.precio_unitario) ORDER BY s.nombre))
  FROM atenciones a JOIN reservas re ON re.id_reserva=a.id_reserva JOIN usuarios u ON u.id_usuario=re.id_cliente
  JOIN vehiculos v ON v.id_vehiculo=re.id_vehiculo JOIN reserva_servicios rs ON rs.id_reserva=re.id_reserva JOIN servicios s ON s.id_servicio=rs.id_servicio
- WHERE a.id_atencion=$1 GROUP BY u.nombre,u.apellido,u.correo,v.placa`, in.IDOperacion).Scan(&monto, &detalle)
+ WHERE a.id_atencion=$1 GROUP BY re.id_reserva,re.fecha_reserva,u.nombre,u.apellido,u.correo,v.placa`, in.IDOperacion).Scan(&monto, &detalle)
 		if err != nil {
 			return nil, err
 		}

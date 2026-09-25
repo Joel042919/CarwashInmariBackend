@@ -1,25 +1,13 @@
 package reservas
 
-import (
-	"reflect"
-	"testing"
-)
+import "testing"
 
 func TestGenerarSlotsBasico(t *testing.T) {
 	tramos := []Rango{{Inicio: 8 * 60, Fin: 12 * 60}} // 08:00-12:00
 	ocupados := []Rango{}
 	got := GenerarSlots(tramos, ocupados, 60, 0)
-	want := []Rango{
-		{Inicio: 480, Fin: 540},
-		{Inicio: 510, Fin: 570},
-		{Inicio: 540, Fin: 600},
-		{Inicio: 570, Fin: 630},
-		{Inicio: 600, Fin: 660},
-		{Inicio: 630, Fin: 690},
-		{Inicio: 660, Fin: 720},
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("slots=\n%v\nwant\n%v", got, want)
+	if len(got) != 37 || got[0] != (Rango{Inicio: 480, Fin: 540}) || got[1] != (Rango{Inicio: 485, Fin: 545}) || got[len(got)-1] != (Rango{Inicio: 660, Fin: 720}) {
+		t.Fatalf("cuadrícula de 5 minutos inesperada: %v", got)
 	}
 }
 
